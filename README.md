@@ -1,0 +1,2 @@
+# HDRPGrass
+Grass for Unity's HD render pipeline. This project was an experiment to learn more about hand-writing HDRP shaders and writing shaders with custom tesselation steps. There's also an additional attempt to create grass using compute shaders + DrawProceduralIndirect. This project was written for Unity version 2019.4.11f1 and given the volatile nature of hand-writing HDRP shaders I doubt it will work in newer versions!
