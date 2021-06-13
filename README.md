@@ -7,3 +7,9 @@ This project was initially part of a larger 3D platformer game but I decided to 
 I should note however that my end conclusion is that were I to do this again, I would not under ANY circumstances attempt to do it with tessellation. It's an outmoded approach and was a real pain to get working, and honestly, it takes up a lot of VRAM. I'd like to attempt this again and just use instances meshes. 
 
 ![hdrpGrass0](https://user-images.githubusercontent.com/18707147/121815886-81bd4380-cc70-11eb-98f6-b842c7ba6033.gif)
+
+This project is divided by the two approaches: named 'TessellationGeometry' and 'Compute.' TessellationGeometry being much more fleshed out.
+
+## TesselationGeometry
+
+TessellationGeometry grass is rendered simply by applying a material with the shader 'Grass/Grass_TessellationGeometry' to a mesh. The mesh geometry will be transformed into a field of verdant grass!
