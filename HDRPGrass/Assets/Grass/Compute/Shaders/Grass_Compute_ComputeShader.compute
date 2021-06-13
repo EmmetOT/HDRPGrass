@@ -1,0 +1,308 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CalculateTotalArea
+
+#include "../../Grass_Common.hlsl"
+#include "Grass_Compute_ComputeStructs.hlsl"
+
+#define INTERLOCKED_FLOAT_ACCURACY 1000.0
+#define MAX_GRASS_BLADE_SEGMENTS 10
+#define MAX_GRASS_BLADE_VERTICES MAX_GRASS_BLADE_SEGMENTS * 2 + 1
+#define NUM_THREADS_X 256
+
+StructuredBuffer<SourceMeshVertexData> _SourcePointData;
+StructuredBuffer<int> _SourceTriangles;
+
+RWStructuredBuffer<int> _TotalAreaInt;
+RWStructuredBuffer<float> _TriangleAreas;
+
+float4x4 _ObjectToWorld;
+float4x4 _WorldToObject;
+
+int _NumSourceTriangles;
+
+//////////////////// STEP ONE ////////////////////
+
+// given a set of triangle and vertex data, calculate the area of the surface of the mesh.
+[numthreads(NUM_THREADS_X, 1, 1)]
+void CalculateTotalArea(uint3 id : SV_DispatchThreadID)
+{
+	// return if every triangle has been processed
+	if ((int) id.x >= _NumSourceTriangles)
+		return;
+	
+	// calculate the start index of this triangle in the index buffer
+	int triStart = id.x * 3;
+	
+	// get the three vertices of the triangle in object space
+    float3 positionOSa = _SourcePointData[_SourceTriangles[triStart]].positionOS;;
+    float3 positionOSb = _SourcePointData[_SourceTriangles[triStart + 1]].positionOS;;
+    float3 positionOSc = _SourcePointData[_SourceTriangles[triStart + 2]].positionOS;;
+	
+	// get the three vertices in world space
+    float3 positionWSa = mul(_ObjectToWorld, float4(positionOSa, 1)).xyz;
+    float3 positionWSb = mul(_ObjectToWorld, float4(positionOSb, 1)).xyz;
+    float3 positionWSc = mul(_ObjectToWorld, float4(positionOSc, 1)).xyz;
+
+	// find the area of the triangle
+	float3 ab = (positionWSb - positionWSa);
+	float3 ac = (positionWSc - positionWSa);
+	float area = length(cross(ab, ac)) * 0.5;
+	
+	_TriangleAreas[id.x] = area;
+    
+	// add it to the final sum
+	InterlockedAdd(_TotalAreaInt[0], (int) (area * INTERLOCKED_FLOAT_ACCURACY));
+}
+
+
+//////////////////// STEP TWO ////////////////////
+
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel AccumulateAreas
+
+RWStructuredBuffer<uint> _ChooseGrassPointsIndirectArgsBuffer;
+float _GrassBladesPerSquareMeter;
+//int _NumOutputPoints;
+RWStructuredBuffer<int> _NumOutputPoints;
+
+// RWStructuredBuffer<float> _TriangleAreas;
+// int _NumSourceTriangles;
+// StructuredBuffer<int> _TotalAreaInt;
+
+// add up the areas so we have an ordered cumulative list of triangle areas
+[numthreads(1, 1, 1)]
+void AccumulateAreas(uint3 id : SV_DispatchThreadID)
+{
+    float totalArea = ((float) _TotalAreaInt[0]) / INTERLOCKED_FLOAT_ACCURACY;
+    
+	float sum = 0;
+	for (int i = 0; i < _NumSourceTriangles; i++)
+	{
+		sum += _TriangleAreas[i];
+        _TriangleAreas[i] = sum;
+    }
+    
+    // num output points is set to -1 if we're using the per square meter setting
+    if (_NumOutputPoints[0] < 0)
+    {
+        // calculate how much grass we'll need to cover that area, with a given density
+        _NumOutputPoints[0] = totalArea * _GrassBladesPerSquareMeter;
+    }
+        
+    // how many threads will we need to get points and vertices for that much grass?
+    _ChooseGrassPointsIndirectArgsBuffer[0] = (uint) ceil(((float) _NumOutputPoints[0]) / NUM_THREADS_X);
+}
+
+//////////////////// STEP THREE ////////////////////
+
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel ChooseGrassPoints
+
+AppendStructuredBuffer<GrassBladeSpaceData> _GrassSpaces_Append;
+AppendStructuredBuffer<float> _VertexColours_Append;
+StructuredBuffer<float> _Seeds;
+
+// StructuredBuffer<uint> _NumOutputPoints;
+// RWStructuredBuffer<float> _TriangleAreas;
+// int _NumSourceTriangles;
+// StructuredBuffer<SourceMeshVertexData> _SourcePointData;
+// StructuredBuffer<int> _SourceTriangles;
+// StructuredBuffer<int> _TotalAreaInt;
+
+// add up the areas so we have an ordered cumulative list of triangle areas
+[numthreads(NUM_THREADS_X, 1, 1)]
+void ChooseGrassPoints(uint3 id : SV_DispatchThreadID)
+{
+    if ((int) id.x >= _NumOutputPoints[0])
+        return;
+    
+    float totalArea = ((float) _TotalAreaInt[0]) / INTERLOCKED_FLOAT_ACCURACY;
+    
+    float randVal = randSin(id.x) * totalArea;
+    
+    // pick a random triangle of the mesh, with the probability of any triangle being picked
+    // proprtional to its area
+    uint triIndex = 0;
+    for (int i = 0; i < _NumSourceTriangles; i++)
+    {
+        // keep going until we reach an accumulated area > the random value
+        if (randVal <= _TriangleAreas[i])
+        {
+            triIndex = i * 3;
+            break;
+        }
+    }
+    
+    uint vertexCount = _NumSourceTriangles * 3;
+    triIndex = triIndex % vertexCount;
+    
+    SourceMeshVertexData a = _SourcePointData[_SourceTriangles[triIndex]];
+    SourceMeshVertexData b = _SourcePointData[_SourceTriangles[triIndex + 1]];
+    SourceMeshVertexData c = _SourcePointData[_SourceTriangles[triIndex + 2]];
+    
+    float3 pos_a = a.positionOS;
+    float3 pos_b = b.positionOS;
+    float3 pos_c = c.positionOS;
+	
+    float3 norm_a = a.normalOS;
+    float3 norm_b = b.normalOS;
+    float3 norm_c = c.normalOS;
+	
+    float3 tan_a = a.tangentOS;
+    float3 tan_b = b.tangentOS;
+    float3 tan_c = c.tangentOS;
+	
+    float2 uv_a = a.uv;
+    float2 uv_b = b.uv;
+    float2 uv_c = c.uv;
+	
+    // 'colour' just means the r channel for now.
+    float colour_a = 1 - a.color.r;
+    float colour_b = 1 - b.color.r;
+    float colour_c = 1 - c.color.r;
+	
+    // generating uniform triangle points
+    // source: https://math.stackexchange.com/questions/18686/uniform-random-point-in-triangle
+    float r_1 = sqrt(randSin(id.x + 1));
+    float r_2 = randSin(id.x + 2);
+	
+    float a_coeff = (1 - r_1);
+    float b_coeff = (r_1 * (1 - r_2));
+    float c_coeff = (r_2 * r_1);
+    
+    GrassBladeSpaceData result;
+    result.positionOS = a_coeff * pos_a + b_coeff * pos_b + c_coeff * pos_c;
+    result.normalOS = a_coeff * norm_a + b_coeff * norm_b + c_coeff * norm_c;
+    result.tangentOS = normalize(a_coeff * tan_a + b_coeff * tan_b + c_coeff * tan_c);
+    result.bitangentOS = cross(result.tangentOS, result.normalOS);
+    result.uv = a_coeff * uv_a + b_coeff * uv_b + c_coeff * uv_c;
+    float colour = a_coeff * colour_a + b_coeff * colour_b + c_coeff * colour_c;
+    
+    _GrassSpaces_Append.Append(result);
+    _VertexColours_Append.Append(colour);
+}
+
+//////////////////// STEP FOUR ////////////////////
+
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel GenerateGrassBlades
+
+StructuredBuffer<GrassBladeProperties> _GrassBladeProperties;
+StructuredBuffer<GrassBladeSpaceData> _GrassSpaces; // = AppendStructuredBuffer<GrassBladeSpaceData> _GrassSpaces_Append;
+StructuredBuffer<float> _VertexColours; // = AppendStructuredBuffer<float> _VertexColours_Append;
+AppendStructuredBuffer<GrassBladeTriangle> _OutMesh;
+RWStructuredBuffer<IndirectArgs> _IndirectArgs;
+int _GrassBladeSegments;
+
+// StructuredBuffer<uint> _NumOutputPoints;
+
+float3 GenerateGrassVertex(float3 originOS, float3x3 transformation, float2 positionTS, float width, float height, float forwardCurvature)
+{
+    // centre the point: uvs go from 0 to 1, for position we want -0.5 to 0.5
+    positionTS.x -= 0.5;
+    
+    float3 dimensions = float3(positionTS.x * width, forwardCurvature, positionTS.y * height);
+    
+    float3 rotatedTS = mul(transformation, dimensions).xyz;
+    return originOS + rotatedTS;
+}
+
+[numthreads(NUM_THREADS_X, 1, 1)]
+void GenerateGrassBlades(uint3 id : SV_DispatchThreadID)
+{
+    if ((int) id.x >= _NumOutputPoints[0])
+        return;
+    
+    GrassBladeProperties properties = _GrassBladeProperties[0];
+    GrassBladeSpaceData space = _GrassSpaces[id.x];
+    
+    float3 originOS = space.positionOS;
+    
+    // get the world position to use it as a seed for randomizing grass properties
+    float3 positionWS = mul(_ObjectToWorld, float4(originOS, 1)).xyz;
+    
+    float vertexColourData = _VertexColours[id.x];
+    
+    if (vertexColourData <= 0)
+        return;
+    
+    float height = ((rand(positionWS.zyx) * 2 - 1) * properties.heightVariance + properties.height) * vertexColourData; // * grassMapScale;
+    float width = ((rand(positionWS.xzy) * 2 - 1) * properties.widthVariance + properties.width) * vertexColourData; // * grassMapScale * polybrush;
+    
+    if (width <= 0 || height <= 0)
+        return;
+    
+    float tipOffsetZ = rand(positionWS.yzx) * properties.tipOffsetZ;
+    
+    float3x3 tangentToLocal = space.GetTangentToLocal();
+    float3x3 facingRotationMatrix = AngleAxis3x3(DegToRad(rand(positionWS.xyz) * properties.rotationRangeY), float3(0, 0, 1));
+    float3x3 bendRotationMatrix = AngleAxis3x3(rand(positionWS.zzx) * properties.rotationRangeX * PI * 0.5, float3(-1, 0, 0));
+    
+    float3x3 transformationMatrix = mul(mul(tangentToLocal, facingRotationMatrix), bendRotationMatrix);
+    float3x3 transformationMatrixFacing = mul(tangentToLocal, facingRotationMatrix);
+
+    int numTriangles = (_GrassBladeSegments - 1) * 2 + 1;
+    
+    float3 vertices[MAX_GRASS_BLADE_VERTICES];
+    float2 uvs[MAX_GRASS_BLADE_VERTICES];
+    
+    float curvature = max(0.01, abs(properties.curvature));
+    
+    for (int i = 0; i < _GrassBladeSegments; i++)
+    {
+        float v = i / (float) _GrassBladeSegments;  // normalized height
+        float u = lerp(0, 0.5, v);                  // normalized width
+        
+        float forwardOffset = pow(abs(v), curvature) * tipOffsetZ;
+        
+        float2 leftUV = float2(u, v);
+        float2 rightUV = float2(1 - u, v);
+        
+        uvs[i * 2] = leftUV;
+        uvs[i * 2 + 1] = rightUV;
+        
+        float3x3 transform = i == 0 ? transformationMatrixFacing : transformationMatrix;
+        
+        vertices[i * 2] = GenerateGrassVertex(originOS, transform, leftUV, width, height, forwardOffset);
+        vertices[i * 2 + 1] = GenerateGrassVertex(originOS, transform, rightUV, width, height, forwardOffset);
+    }
+    
+    float2 tip = float2(0.5, 1);
+    
+    // tip vertex
+    vertices[_GrassBladeSegments * 2] = GenerateGrassVertex(originOS, transformationMatrix, tip, width, height, tipOffsetZ);
+    uvs[_GrassBladeSegments * 2] = tip;
+    
+    for (int j = 0; j < numTriangles; j++)
+    {
+        // ensure correct winding order 
+        int clockwise = when_le(fmod(j, 2), 1);
+        
+        int index_1 = lerp(j + 1, j, clockwise);
+        int index_2 = lerp(j, j + 1, clockwise);
+        int index_3 = j + 2;
+        
+        _OutMesh.Append(GenerateTriangleData(vertices[index_1], vertices[index_2], vertices[index_3], uvs[j], uvs[j + 1], uvs[j + 2], space));
+    }
+    
+    // tell the renderer how many vertices there are in the final mesh
+    InterlockedAdd(_IndirectArgs[0].verticesPerInstance, numTriangles * 3);
+}
+
+//////////////////// VERTEX COUNTER ////////////////////
+
+// Each #kernel tells which function to compile; you can have many kernels
+//#pragma kernel CountVertices
+
+////AppendStructuredBuffer<GrassBladeTriangle> _OutMesh;
+////RWStructuredBuffer<IndirectArgs> _IndirectArgs;
+
+//[numthreads(1, 1, 1)]
+//void CountVertices(uint3 id : SV_DispatchThreadID)
+//{
+    
+    
+    
+//    // tell the renderer how many vertices there are in the final mesh
+//    InterlockedAdd(_IndirectArgs[0].verticesPerInstance, numTriangles * 3);
+//}

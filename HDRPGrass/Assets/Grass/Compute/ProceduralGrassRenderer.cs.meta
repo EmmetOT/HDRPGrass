@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 00ef4e4a38726b340be8ab5023693b27
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - m_meshFilter: {instanceID: 0}
+  - m_grassStatic: {fileID: 7200000, guid: 7e25eb7ffbaffaf4cbf07769a909b750, type: 3}
+  - m_grassMaterial: {fileID: 2100000, guid: b953baad48f2cff4e86291963464c222, type: 2}
+  - m_grassMaterialMeshes: {fileID: 2100000, guid: 17426a8d928fbdf4b8cb380571d04fe2,
+      type: 2}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

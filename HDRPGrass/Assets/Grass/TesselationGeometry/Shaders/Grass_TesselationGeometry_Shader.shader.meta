@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: 8c53b87940c91d945a7892f9d6732be3
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: '{"shaderPath":"Grass","attributes":[{"channel":64,"index":0,"range":{"x":0.0,"y":1.0},"propertyTarget":"_Texture1","mask":0}]}'
+  assetBundleName: 
+  assetBundleVariant: 
