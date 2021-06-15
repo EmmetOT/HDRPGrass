@@ -72,6 +72,6 @@ This grass is controlled with a ProceduralGrassRenderer component. This componen
 
 ![hdrpGrass7](https://user-images.githubusercontent.com/18707147/122127958-d953de80-ce2b-11eb-92a2-b6836f7c75ad.png)
 
-but now your asset can be used as a brush in terrain!
+but now your asset can be used as a brush in terrain! (The prefab used here is included in the project - 'LODGrass'.)
 
 ![placing-compute-shader-hdrp-grass](https://user-images.githubusercontent.com/18707147/122127892-c5a87800-ce2b-11eb-82a9-03a2126d6f4c.gif)
