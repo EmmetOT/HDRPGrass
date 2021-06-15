@@ -70,7 +70,7 @@ The demo for the Compute version is comparitively much simpler. Instead of using
 
 This grass is controlled with a ProceduralGrassRenderer component. This component is also capable of 'baking' the generated mesh and saving it as an asset. When combined with the correct material, the result is exactly like the procedural output...
 
-![hdrpGrass6](https://user-images.githubusercontent.com/18707147/122127802-a27dc880-ce2b-11eb-8db0-f9073fdec921.png)
+![hdrpGrass7](https://user-images.githubusercontent.com/18707147/122127958-d953de80-ce2b-11eb-92a2-b6836f7c75ad.png)
 
 but now your asset can be used as a brush in terrain!
 
