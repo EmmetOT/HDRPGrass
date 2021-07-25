@@ -62,3 +62,16 @@ Colour each LOD by RGB.
 
 ![hdrpGrass6](https://user-images.githubusercontent.com/18707147/121817221-f182fc80-cc77-11eb-8e48-fef1f637f546.gif)
 
+## Compute
+
+![hdrpGrass6](https://user-images.githubusercontent.com/18707147/122127471-1f5c7280-ce2b-11eb-8d8a-d4ac9f34f322.png)
+
+The demo for the Compute version is comparitively much simpler. Instead of using tessellation, the compute grass takes some input geometry and generates a fixed number of random evenly distributed points on its surface. Grass geometry is then generated at these points and buffered, making this approach a lot faster than tessellation, at the cost of being more unwieldy (it's not just a drag-and-drop material anymore.)
+
+This grass is controlled with a ProceduralGrassRenderer component. This component is also capable of 'baking' the generated mesh and saving it as an asset. When combined with the correct material, the result is exactly like the procedural output...
+
+![hdrpGrass7](https://user-images.githubusercontent.com/18707147/122127958-d953de80-ce2b-11eb-92a2-b6836f7c75ad.png)
+
+but now your asset can be used as a brush in terrain! (The prefab used here is included in the project - 'LODGrass'.)
+
+![placing-compute-shader-hdrp-grass](https://user-images.githubusercontent.com/18707147/122127892-c5a87800-ce2b-11eb-82a9-03a2126d6f4c.gif)
